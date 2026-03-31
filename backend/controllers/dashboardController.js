@@ -138,7 +138,7 @@ exports.getIssuesByOrganization = async (req, res) => {
           as: 'orgInfo',
         },
       },
-      { $unwind: { path: '$orgInfo', preserveNullAndEmpty: true } },
+      { $unwind: { path: '$orgInfo', preserveNullAndEmptyArrays: true } },
 
       // Group by org name + issue category
       {

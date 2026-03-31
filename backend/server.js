@@ -15,6 +15,45 @@ const alertRoutes      = require('./routes/alertRoutes');
 const dashboardRoutes  = require('./routes/dashboardRoutes');
 
 const app = express();
+const PORT = process.env.PORT || 5000;
+
+const getServiceStatus = () => {
+  const azureConfigured = Boolean(
+    process.env.AZURE_OPENAI_API_KEY &&
+    process.env.AZURE_OPENAI_ENDPOINT &&
+    process.env.AZURE_WHISPER_DEPLOYMENT_NAME
+  );
+  const openRouterConfigured = Boolean(process.env.OPENROUTER_API_KEY);
+
+  return {
+    database: 'MongoDB',
+    llm: openRouterConfigured
+      ? `OpenRouter (${process.env.CHAT_MODEL_ID || process.env.OPENROUTER_CHAT_MODEL || 'qwen3.5-397b-a17b'})`
+      : 'Fallback responses only',
+    transcription: azureConfigured
+      ? `Azure Whisper (${process.env.AZURE_WHISPER_DEPLOYMENT_NAME})`
+      : 'Not configured',
+    scoring: process.env.MENTAL_ROBERTA_MODEL || 'MentalRoBERTa / ML pipeline',
+    mlPython: process.env.ML_PYTHON_BIN || path.join(path.resolve(__dirname, '..'), 'venv', 'bin', 'python'),
+  };
+};
+
+const logStartupSummary = () => {
+  const services = getServiceStatus();
+
+  console.log('');
+  console.log('================ MindBridge Backend ================');
+  console.log(`Environment : ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Port        : ${PORT}`);
+  console.log(`Database    : ${services.database}`);
+  console.log(`LLM         : ${services.llm}`);
+  console.log(`Transcriber : ${services.transcription}`);
+  console.log(`Scoring     : ${services.scoring}`);
+  console.log(`ML Python   : ${services.mlPython}`);
+  console.log('Logs        : [LLM] chat model calls, [ML] pipeline calls, [Assessment] end-to-end triage');
+  console.log('====================================================');
+  console.log('');
+};
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());                        // Allow cross-origin requests from the React frontend
@@ -64,11 +103,12 @@ app.use((req, res) => {
 });
 
 // ── Start server ──────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 5000;
 const startServer = async () => {
+  logStartupSummary();
   await connectDB();
   return app.listen(PORT, () => {
-    console.log(`🚀 MindBridge server running on port ${PORT} [${process.env.NODE_ENV}]`);
+    console.log(`🚀 MindBridge server running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
+    console.log('✅ Ready to accept API requests.');
   });
 };
 

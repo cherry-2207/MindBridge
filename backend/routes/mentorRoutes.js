@@ -5,6 +5,8 @@ const {
   setAvailability,
   getMyAvailability,
   deleteAvailability,
+  getEscalatedCases,
+  claimEscalatedCase,
 } = require('../controllers/mentorController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -15,5 +17,7 @@ router.get('/', protect, getAvailableMentors);
 router.post('/availability', protect, authorize('mentor'), setAvailability);
 router.get('/availability/me', protect, authorize('mentor'), getMyAvailability);
 router.delete('/availability/:id', protect, authorize('mentor'), deleteAvailability);
+router.get('/escalated', protect, authorize('mentor'), getEscalatedCases);
+router.put('/escalated/:id/claim', protect, authorize('mentor'), claimEscalatedCase);
 
 module.exports = router;

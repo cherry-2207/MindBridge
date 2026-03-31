@@ -1,4 +1,4 @@
-"""Session summariser using Claude Haiku through OpenRouter."""
+"""Session summariser using the configured OpenRouter model."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ Summarise the session in 3-5 sentences for a peer mentor.
 
 
 class Summariser:
-    """Claude Haiku wrapper via OpenRouter's OpenAI-compatible API."""
+    """OpenRouter wrapper using the configured chat model."""
 
     def __init__(self) -> None:
         if not OPENROUTER_API_KEY:

@@ -1,7 +1,7 @@
-const DEFAULT_MODEL = process.env.CHAT_MODEL_ID || process.env.CLAUDE_MODEL_ID || 'anthropic/claude-3.5-haiku';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 const OPENROUTER_APP_NAME = process.env.OPENROUTER_APP_NAME || 'MindBridge';
 const OPENROUTER_SITE_URL = process.env.OPENROUTER_SITE_URL || 'https://mindbridge.local';
+const CHAT_LLM_TIMEOUT_MS = Number(process.env.CHAT_LLM_TIMEOUT_MS || process.env.OPENROUTER_TIMEOUT_MS || 20000);
 
 const SYSTEM_PROMPT = `You are MindBridge, a calm and empathetic youth mental health support chatbot.
 
@@ -65,37 +65,97 @@ const buildMessages = (chatSession) => {
   ];
 };
 
+const getModelCandidates = () => {
+  const candidates = [
+    process.env.CHAT_MODEL_ID,
+    process.env.CHAT_FALLBACK_MODEL_ID,
+    process.env.OPENROUTER_CHAT_MODEL,
+    'qwen3.5-397b-a17b',
+    'openai/gpt-4o-mini',
+  ].filter(Boolean);
+
+  return [...new Set(candidates)];
+};
+
+const shouldTryNextModel = (statusCode, errorText = '', errorMessage = '') => {
+  const combinedErrorText = `${errorText} ${errorMessage}`.trim();
+
+  if (!statusCode && /timed out|timeout|abort/i.test(combinedErrorText)) {
+    return true;
+  }
+
+  if (statusCode === 403 || statusCode === 404) {
+    return true;
+  }
+
+  return /model|provider|unsupported|not available|not allowed/i.test(combinedErrorText);
+};
+
+const requestChatCompletion = async (model, chatSession) => {
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(CHAT_LLM_TIMEOUT_MS),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'HTTP-Referer': OPENROUTER_SITE_URL,
+      'X-Title': OPENROUTER_APP_NAME,
+    },
+    body: JSON.stringify({
+      model,
+      messages: buildMessages(chatSession),
+      temperature: 0.7,
+      max_tokens: 220,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const error = new Error(`OpenRouter error ${response.status}: ${errorText}`);
+    error.statusCode = response.status;
+    error.errorText = errorText;
+    throw error;
+  }
+
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content?.trim();
+};
+
 const generateChatReply = async (chatSession, latestUserMessage) => {
   if (!process.env.OPENROUTER_API_KEY) {
+    console.log('[LLM] OpenRouter API key not configured. Using fallback response.');
     return generateFallbackResponse(latestUserMessage);
   }
 
-  try {
-    const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      signal: AbortSignal.timeout(30000),
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': OPENROUTER_SITE_URL,
-        'X-Title': OPENROUTER_APP_NAME,
-      },
-      body: JSON.stringify({
-        model: DEFAULT_MODEL,
-        messages: buildMessages(chatSession),
-        temperature: 0.7,
-        max_tokens: 220,
-      }),
-    });
+  const modelCandidates = getModelCandidates();
+  let lastError = null;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`OpenRouter error ${response.status}: ${errorText}`);
+  try {
+    for (const model of modelCandidates) {
+      try {
+        console.log(
+          `[LLM] Requesting chat completion via OpenRouter model="${model}" ` +
+          `messages=${chatSession.messages.length + 1}`
+        );
+
+        const content = await requestChatCompletion(model, chatSession);
+        console.log(`[LLM] Chat completion received successfully from model="${model}".`);
+        return content || generateFallbackResponse(latestUserMessage);
+      } catch (error) {
+        lastError = error;
+
+        if (shouldTryNextModel(error.statusCode, error.errorText, error.message)) {
+          console.warn(
+            `[LLM] Model "${model}" failed (${error.message}). Trying next configured model.`
+          );
+          continue;
+        }
+
+        throw error;
+      }
     }
 
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content?.trim();
-    return content || generateFallbackResponse(latestUserMessage);
+    throw lastError || new Error('No OpenRouter models were available.');
   } catch (error) {
     console.warn('Chatbot LLM unavailable, falling back to heuristic response:', error.message);
     return generateFallbackResponse(latestUserMessage);

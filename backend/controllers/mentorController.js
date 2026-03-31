@@ -1,5 +1,11 @@
 const MentorAvailability = require('../models/MentorAvailability');
 const User = require('../models/User');
+const Alert = require('../models/Alert');
+
+const getOrganizationUserIds = async (organizationId) => {
+  const users = await User.find({ organization: organizationId }).select('_id');
+  return users.map((user) => user._id);
+};
 
 // ─────────────────────────────────────────────
 // @desc    Get available mentors filtered by date, language, gender
@@ -71,7 +77,7 @@ exports.setAvailability = async (req, res) => {
         language: req.user.language,
         gender: req.user.gender,
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     res.status(201).json({ success: true, data: availability });
@@ -115,6 +121,72 @@ exports.deleteAvailability = async (req, res) => {
     }
 
     res.json({ success: true, message: 'Availability slot removed.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────
+// @desc    Get high-priority escalated cases for mentors
+// @route   GET /api/mentors/escalated
+// @access  Private (mentors only)
+// ─────────────────────────────────────────────
+exports.getEscalatedCases = async (req, res) => {
+  try {
+    const organizationUserIds = await getOrganizationUserIds(req.user.organization._id);
+
+    const alerts = await Alert.find({
+      user: { $in: organizationUserIds },
+      severity: 'high',
+      status: { $in: ['active', 'acknowledged'] },
+    })
+      .populate('user', 'name ageGroup language')
+      .populate('assessment', 'summary intensityLevel distressScore keyPhrases')
+      .populate('assignedTo', 'name email')
+      .sort('-createdAt');
+
+    res.json({
+      success: true,
+      count: alerts.length,
+      data: alerts,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────
+// @desc    Claim an escalated case for mentor follow-up
+// @route   PUT /api/mentors/escalated/:id/claim
+// @access  Private (mentors only)
+// ─────────────────────────────────────────────
+exports.claimEscalatedCase = async (req, res) => {
+  try {
+    const organizationUserIds = await getOrganizationUserIds(req.user.organization._id);
+
+    const alert = await Alert.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        user: { $in: organizationUserIds },
+        severity: 'high',
+        status: { $in: ['active', 'acknowledged'] },
+      },
+      {
+        assignedTo: req.user._id,
+        status: 'acknowledged',
+        acknowledgedAt: new Date(),
+      },
+      { returnDocument: 'after' }
+    )
+      .populate('user', 'name ageGroup language')
+      .populate('assessment', 'summary intensityLevel distressScore keyPhrases')
+      .populate('assignedTo', 'name email');
+
+    if (!alert) {
+      return res.status(404).json({ success: false, message: 'Escalated case not found.' });
+    }
+
+    res.json({ success: true, data: alert });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

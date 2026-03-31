@@ -22,6 +22,11 @@ const EXTENSION_BY_MIME = {
 
 const runMlPipeline = (payload) =>
   new Promise((resolve, reject) => {
+    console.log(
+      `[ML] Invoking Python pipeline via ${PYTHON_BIN} ` +
+      `(text=${Boolean(payload.text)}, audio=${Boolean(payload.audio_path)})`
+    );
+
     const child = execFile(
       PYTHON_BIN,
       [PIPELINE_SCRIPT],
@@ -37,7 +42,12 @@ const runMlPipeline = (payload) =>
         }
 
         try {
-          resolve(JSON.parse(stdout));
+          const parsed = JSON.parse(stdout);
+          console.log(
+            `[ML] Pipeline completed successfully ` +
+            `(language=${parsed.detected_language || 'unknown'}, intensity=${parsed.scoring?.intensity || 'n/a'})`
+          );
+          resolve(parsed);
         } catch (parseError) {
           reject(
             new Error(
@@ -96,11 +106,13 @@ const withTemporaryAudioFile = async ({ audioBase64, fileName }, callback) => {
   );
 
   await fs.writeFile(tempFilePath, parsed.buffer);
+  console.log(`[ML] Temporary audio file created: ${path.basename(tempFilePath)}`);
 
   try {
     return await callback(tempFilePath);
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
+    console.log(`[ML] Temporary audio file cleaned up: ${path.basename(tempFilePath)}`);
   }
 };
 

@@ -100,7 +100,7 @@ exports.acknowledgeAlert = async (req, res) => {
         assignedTo: req.user._id, // Assign to the NGO staff member who acknowledged
         acknowledgedAt: new Date(),
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!alert) {
@@ -136,7 +136,7 @@ exports.resolveAlert = async (req, res) => {
         resolvedAt: new Date(),
         resolutionNotes: resolutionNotes || '',
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!alert) {

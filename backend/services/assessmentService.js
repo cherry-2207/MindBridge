@@ -41,7 +41,7 @@ const syncAlertForAssessment = async (assessment) => {
     },
     {
       upsert: true,
-      new: true,
+      returnDocument: 'after',
       setDefaultsOnInsert: true,
     }
   );
@@ -64,6 +64,11 @@ const analyzeAndPersistAssessment = async ({
   if (!text && !audioPath) {
     throw new Error('Either text or audio input is required for assessment.');
   }
+
+  console.log(
+    `[Assessment] Starting analysis sourceType="${sourceType}" ` +
+    `sourceId="${sourceId || 'direct'}" text=${Boolean(text)} audio=${Boolean(audioPath)}`
+  );
 
   const pipelineResult = await runMlPipeline({
     text,
@@ -108,11 +113,16 @@ const analyzeAndPersistAssessment = async ({
       ? await Assessment.findOneAndUpdate(
           { user: userId, sourceType, sourceId },
           assessmentPayload,
-          { upsert: true, new: true, setDefaultsOnInsert: true }
+          { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         )
       : await Assessment.create(assessmentPayload);
 
   const alert = await syncAlertForAssessment(assessment);
+
+  console.log(
+    `[Assessment] Completed analysis issue="${issueCategory}" intensity="${intensityLevel}" ` +
+    `triage="${assessment.triageAction}" alert=${Boolean(alert)}`
+  );
 
   return {
     assessment,

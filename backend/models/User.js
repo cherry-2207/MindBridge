@@ -35,6 +35,18 @@ const userSchema = new mongoose.Schema(
       default: 'user',
     },
 
+    mentorType: {
+      type: String,
+      enum: ['peer', 'professional'],
+      default: undefined,
+    },
+
+    specialization: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+
     // Organization the user belongs to (school / NGO)
     organization: {
       type: mongoose.Schema.Types.ObjectId,

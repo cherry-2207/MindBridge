@@ -15,6 +15,8 @@ const sanitizeUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  mentorType: user.mentorType,
+  specialization: user.specialization,
   organization: user.organization,
   gender: user.gender,
   language: user.language,
@@ -122,6 +124,47 @@ exports.getMe = async (req, res) => {
     res.json({
       success: true,
       data: user,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────
+// @desc    Update current logged-in user profile
+// @route   PUT /api/auth/me
+// @access  Private
+// ─────────────────────────────────────────────
+exports.updateMe = async (req, res) => {
+  try {
+    const allowedFields = ['name', 'gender', 'language', 'ageGroup', 'mentorType', 'specialization'];
+    const updates = {};
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    if (req.body.organizationId) {
+      const org = await Organization.findById(req.body.organizationId);
+      if (!org) {
+        return res.status(400).json({
+          success: false,
+          message: 'Organization not found. Please provide a valid organization ID.',
+        });
+      }
+      updates.organization = org._id;
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id, updates, {
+      new: true,
+      runValidators: true,
+    }).populate('organization', 'name type location');
+
+    res.json({
+      success: true,
+      data: sanitizeUser(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
