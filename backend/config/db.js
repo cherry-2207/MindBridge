@@ -8,7 +8,8 @@ const connectDB = async () => {
         return conn;
     } catch (error) {
         console.error(`❌ MongoDB Connection Error: ${error.message}`);
-        process.exit(1); // Exit process on DB failure
+        console.warn(`⚠️ Running backend without MongoDB. Database-dependent features will not work until a valid database is provided.`);
+        // process.exit(1); // Exit process on DB failure
     }
 };
 

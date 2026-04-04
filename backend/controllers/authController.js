@@ -90,6 +90,25 @@ exports.login = async (req, res) => {
       });
     }
 
+    // --- MOCK USER BYPASS ---
+    if (email === 'user@gmail.com' && password === 'user') {
+      const mockUser = {
+        _id: 'mock_user_id_12345',
+        name: 'Sample User',
+        email: 'user@gmail.com',
+        role: 'user',
+        gender: 'female',
+        language: 'en',
+        ageGroup: '18-24'
+      };
+      const token = generateToken(mockUser._id);
+      return res.json({
+        success: true,
+        data: { ...mockUser, token },
+      });
+    }
+    // ------------------------
+
     // Explicitly select password as it's excluded by default (select: false)
     const user = await User.findOne({ email }).select('+password').populate('organization', 'name type');
 

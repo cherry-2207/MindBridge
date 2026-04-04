@@ -24,6 +24,20 @@ const protect = async (req, res, next) => {
     // Verify signature and expiry
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    // MOCK USER BYPASS
+    if (decoded.id === 'mock_user_id_12345') {
+       req.user = {
+         _id: 'mock_user_id_12345',
+         name: 'Sample User',
+         email: 'user@gmail.com',
+         role: 'user',
+         gender: 'female',
+         language: 'en',
+         ageGroup: '18-24'
+       };
+       return next();
+    }
+
     // Attach user to request (exclude password)
     req.user = await User.findById(decoded.id).populate('organization', 'name type');
 
